@@ -34,9 +34,9 @@ def create_store():
     path = os.path.join(TENANTS_DIR, tenant)
     os.makedirs(path, exist_ok=True)
 
-    admin_email = custom_email 
-    admin_password = custom_password 
-    admin_folder = "admin"  
+    admin_email = custom_email
+    admin_password = custom_password
+    admin_folder = "admin"  # fallback
 
     compose = f"""
 version: '3.9'
@@ -97,18 +97,10 @@ networks:
         f.write(compose)
 
     subprocess.run([
-       'sudo', 'docker-compose', '-f', f'{path}/docker-compose.yml', 'up', '-d'
+        'sudo', 'docker-compose', '-f', f'{path}/docker-compose.yml', 'up', '-d'
     ], check=True)
 
-    container_name = f"{tenant}_shop"
-    command = f"docker exec {container_name} sh -c \"basename $(find /var/www/html -maxdepth 1 -type d -name 'admin*' | head -n 1)\""
-
-    try:
-        admin_folder = subprocess.check_output(command, shell=True).decode().strip()
-    except subprocess.CalledProcessError as e:
-        print(f"Error fetching admin folder: {e}")
-        admin_folder = "admin"  
-
+    # Wait until the shop responds on the port
     shop_url = f"http://localhost:{port}"
     for _ in range(30):
         try:
@@ -118,6 +110,22 @@ networks:
         except requests.RequestException:
             pass
         time.sleep(2)
+
+    # Retry to find admin folder
+    container_name = f"{tenant}_shop"
+    admin_folder = "admin"  # fallback
+
+    for _ in range(30):
+        try:
+            command = f"docker exec {container_name} sh -c \"basename $(find /var/www/html -maxdepth 1 -type d -name 'admin*' | head -n 1)\""
+            admin_folder = subprocess.check_output(command, shell=True).decode().strip()
+            if admin_folder.startswith("admin"):
+                break
+        except subprocess.CalledProcessError:
+            pass
+        time.sleep(2)
+    else:
+        print("⚠️ Failed to fetch admin folder. Using fallback.")
 
     admin_url = f"{shop_url}/{admin_folder}"
     return jsonify({
