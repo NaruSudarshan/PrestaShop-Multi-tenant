@@ -18,6 +18,18 @@ def get_next_port():
                 return port
         port += 1
 
+def wait_for_mysql(port):
+    """Wait for MySQL to be ready."""
+    for _ in range(30):
+        try:
+            r = requests.get(f'http://localhost:{port}/health')  # Assuming MySQL health check endpoint is available
+            if r.status_code == 200:
+                return True
+        except requests.RequestException:
+            pass
+        time.sleep(2)
+    return False
+
 @app.route('/')
 def index():
     return send_from_directory('static', 'index.html')
@@ -92,15 +104,20 @@ networks:
   ps-net:
     driver: bridge
 """
-
+    # Write the docker-compose file
     with open(f"{path}/docker-compose.yml", "w") as f:
         f.write(compose)
 
-    subprocess.run([
-        'sudo', 'docker-compose', '-f', f'{path}/docker-compose.yml', 'up', '-d'
-    ], check=True)
+    try:
+        subprocess.run(['sudo', 'docker-compose', '-f', f'{path}/docker-compose.yml', 'up', '-d'], check=True)
+    except subprocess.CalledProcessError as e:
+        return jsonify({"error": "Failed to start Docker container", "message": str(e)}), 500
 
-    # Wait until the shop responds on the port
+    # Wait for MySQL to be available
+    if not wait_for_mysql(port):
+        return jsonify({"error": "MySQL service not available"}), 500
+
+    # Wait until PrestaShop responds
     shop_url = f"http://localhost:{port}"
     for _ in range(30):
         try:
@@ -111,7 +128,7 @@ networks:
             pass
         time.sleep(2)
 
-    # Retry to find admin folder
+    # Fetch the admin folder dynamically
     container_name = f"{tenant}_shop"
     admin_folder = "admin"  # fallback
 
