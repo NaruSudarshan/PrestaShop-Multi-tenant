@@ -57,6 +57,10 @@
       color: #2c3e50;
       font-weight: 600;
     }
+    #spinner {
+      display: none;
+      margin-left: 10px;
+    }
   </style>
 </head>
 <body>
@@ -67,7 +71,10 @@
   <label for="password">Admin Password:</label>
   <input type="text" id="password" placeholder="SecurePassword123">
 
-  <button id="create-btn">Launch My Store</button>
+  <button id="create-btn">
+    Launch My Store
+    <span id="spinner">🔄</span>
+  </button>
   <p id="output"></p>
 
   <script>
@@ -75,8 +82,18 @@
       const btn = document.getElementById('create-btn');
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
+      const spinner = document.getElementById('spinner');
+      const output = document.getElementById('output');
+      
+      // Validate inputs
+      if (!email || !password) {
+        output.textContent = '❌ Please fill in both email and password fields.';
+        return;
+      }
+
       btn.disabled = true;
       btn.textContent = 'Creating...';
+      spinner.style.display = 'inline'; // Show loading spinner
 
       try {
         const res = await fetch('/create-store', {
@@ -84,21 +101,28 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
         });
-        const data = await res.json();
 
-        document.getElementById('output').innerHTML =
-          `✅ Store Ready: <a href="${data.url}" target="_blank">${data.url}</a><br />` +
-          `🔐 Admin URL: <a href="${data.admin_url}" target="_blank">${data.admin_url}</a><br />` +
-          `📧 Email: ${data.admin_email}<br />` +
-          `🔑 Password: ${data.admin_password}`;
+        const data = await res.json();
+        
+        if (res.ok) {
+          output.innerHTML =
+            `✅ Store Ready: <a href="${data.url}" target="_blank">${data.url}</a><br />` +
+            `🔐 Admin URL: <a href="${data.admin_url}" target="_blank">${data.admin_url}</a><br />` +
+            `📧 Email: ${data.admin_email}<br />` +
+            `🔑 Password: ${data.admin_password}`;
+        } else {
+          output.textContent = `❌ ${data.error || 'Error creating store'}`;
+        }
       } catch (err) {
-        document.getElementById('output').textContent = '❌ Error creating store';
+        output.textContent = '❌ Error creating store';
         console.error(err);
       } finally {
         btn.disabled = false;
         btn.textContent = 'Launch My Store';
+        spinner.style.display = 'none'; // Hide loading spinner
       }
     });
   </script>
 </body>
 </html>
+
